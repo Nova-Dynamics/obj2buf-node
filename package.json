@@ -1,0 +1,31 @@
+{
+  "name": "obj2buf",
+  "version": "1.0.0",
+  "description": "A powerful, type-safe encoder/decoder for structured binary data serialization",
+  "main": "index.js",
+  "keywords": [
+    "serialization",
+    "binary",
+    "buffer",
+    "encoding",
+    "decoding",
+    "objects",
+    "structured-data",
+    "type-safe",
+    "schema",
+    "protocol",
+    "network",
+    "performance"
+  ],
+  "scripts": {
+    "test": "mocha test/**/*.test.js",
+    "test:watch": "mocha test/**/*.test.js --watch",
+    "test:coverage": "nyc mocha test/**/*.test.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "chai": "^6.0.1",
+    "mocha": "^11.7.2"
+  }
+}
