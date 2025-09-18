@@ -1,14 +1,33 @@
-# obj2buf C++ Bindings
+# obj2buf C++ Bindings v1.0.0
 
 C++11 header-only library for deserializing binary data created by the obj2buf JavaScript library.
 
+Compatible with obj2buf JavaScript library v1.0.0+
+
 ## Features
 
-- **Header-only**: Single `obj2buf.hpp` file, no compilation required
+- **Header-only*// 2. C++ side
+#include "obj2buf.hpp"
+
+void process_user_data(const std::vector<uint8_t>& buffer, 
+                      const nlohmann::json& schema_json) {
+    std::cout << "Using obj2buf C++ bindings v" << obj2buf::version() << std::endl;
+    
+    obj2buf::Schema schema(schema_json["root_type"]);
+    nlohmann::json user = schema.deserialize(buffer);
+    
+    uint32_t id = user["id"];
+    std::string name = user["name"];
+    uint32_t age = user["age"];
+    
+    std::cout << "Processing user: " << name 
+              << " (ID: " << id << ", Age: " << age << ")" << std::endl;
+}buf.hpp` file, no compilation required
 - **C++11 Compatible**: Works with modern C++ standards
 - **nlohmann/json Integration**: Uses familiar JSON objects for deserialized data
 - **Complete Type Support**: All obj2buf types supported (primitives, strings, arrays, maps, etc.)
 - **Exception Safety**: Proper error handling with descriptive messages
+- **Version Information**: Built-in version checking for compatibility
 
 ## Dependencies
 
@@ -94,6 +113,30 @@ nlohmann::json result = schema.deserialize(raw_buffer, buffer_size);
 nlohmann::json schema_json = /* received from JavaScript */;
 obj2buf::Schema schema(schema_json);
 ```
+
+## Version Information
+
+Check the version of the C++ bindings:
+
+```cpp
+#include "obj2buf.hpp"
+#include <iostream>
+
+int main() {
+    std::cout << "obj2buf C++ bindings version: " << obj2buf::version() << std::endl;
+    std::cout << "Major: " << obj2buf::version_major() << std::endl;
+    std::cout << "Minor: " << obj2buf::version_minor() << std::endl;
+    std::cout << "Patch: " << obj2buf::version_patch() << std::endl;
+    return 0;
+}
+```
+
+### Compatibility
+
+- **C++ Bindings v1.0.0**: Compatible with obj2buf JavaScript v1.0.0+
+- **Breaking changes**: Will be indicated by major version bumps
+- **New features**: Will be indicated by minor version bumps  
+- **Bug fixes**: Will be indicated by patch version bumps
 
 ## Supported Types
 

@@ -1,5 +1,20 @@
 #pragma once
 
+/*
+ * obj2buf C++ Bindings v1.0.0
+ * 
+ * Header-only C++11 library for deserializing binary data created by obj2buf JavaScript library.
+ * Compatible with obj2buf JavaScript library v1.0.0+
+ * 
+ * GitHub: https://github.com/Nova-Dynamics/obj2buf-node
+ * License: ISC
+ */
+
+#define OBJ2BUF_VERSION_MAJOR 1
+#define OBJ2BUF_VERSION_MINOR 0
+#define OBJ2BUF_VERSION_PATCH 0
+#define OBJ2BUF_VERSION "1.0.0"
+
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -11,6 +26,23 @@
 namespace obj2buf {
 
 using json = nlohmann::json;
+
+// Version information
+inline const char* version() {
+    return OBJ2BUF_VERSION;
+}
+
+inline int version_major() {
+    return OBJ2BUF_VERSION_MAJOR;
+}
+
+inline int version_minor() {
+    return OBJ2BUF_VERSION_MINOR;
+}
+
+inline int version_patch() {
+    return OBJ2BUF_VERSION_PATCH;
+}
 
 // Exception class for parsing errors
 class parser_error : public std::runtime_error {

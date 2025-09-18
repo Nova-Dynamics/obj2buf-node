@@ -15,6 +15,12 @@ Transform JavaScript objects into compact binary buffers and back with zero data
 - **Tested**: 243+ tests covering real-world scenarios
 - **Cross-Language**: C++ bindings available for native applications
 
+### Versioning
+
+- **JavaScript Library**: Follows semantic versioning (semver)
+- **C++ Bindings**: Independent versioning, compatibility noted in documentation
+- **Binary Format**: Stable across patch versions, changes documented in major/minor releases
+
 ## Installation
 
 ### JavaScript/Node.js
@@ -24,6 +30,8 @@ npm install obj2buf
 
 ### C++ Bindings
 The package includes C++11 header-only bindings for deserializing data in native applications. See [`bindings/cpp/README.md`](bindings/cpp/README.md) for details.
+
+**Current version**: C++ bindings v1.0.0 (compatible with obj2buf JavaScript v1.0.0+)
 
 ## Quick Start
 

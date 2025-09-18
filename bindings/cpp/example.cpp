@@ -4,6 +4,9 @@
 #include <iomanip>
 
 int main() {
+    std::cout << "obj2buf C++ Bindings Example (v" << obj2buf::version() << ")\n";
+    std::cout << "================================================\n\n";
+    
     try {
         // Example: User profile schema that matches JavaScript side
         // This matches the schema.to_json() output from JavaScript
