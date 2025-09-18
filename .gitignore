@@ -1,1 +1,4 @@
 node_modules
+bindings/cpp/include
+bindings/cpp/obj2buf_example
+bindings/cpp/obj2buf_example.exe
