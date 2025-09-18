@@ -383,16 +383,20 @@ public:
 class VarStringType : public Type {
 private:
     size_t max_length_;
-    bool use_two_byte_header_;
 
 public:
-    explicit VarStringType(size_t max_length = 65535) 
-        : max_length_(max_length), use_two_byte_header_(max_length >= 256) {}
-    
+    explicit VarStringType(size_t max_length = 65535)
+        : max_length_(max_length) {}
+
+    // Returns header size (1 or 2 bytes) based on max_length
+    size_t header_size() const {
+        return max_length_ >= 256 ? 2 : 1;
+    }
+
     json deserialize(const uint8_t* buffer, size_t& offset, size_t buffer_size) const override {
-        // Read length header
         size_t str_length;
-        if (use_two_byte_header_) {
+        size_t hdr_size = header_size();
+        if (hdr_size == 2) {
             if (offset + 2 > buffer_size) {
                 throw parser_error("Buffer underflow reading VarStringType header (2-byte)");
             }
@@ -404,22 +408,22 @@ public:
             }
             str_length = buffer[offset++];
         }
-        
-        // Read string data
+        if (str_length > max_length_) {
+            throw parser_error("VarStringType string length " + std::to_string(str_length) + " exceeds max_length " + std::to_string(max_length_));
+        }
         if (offset + str_length > buffer_size) {
             throw parser_error("Buffer underflow reading VarStringType data");
         }
-        
         std::string value(reinterpret_cast<const char*>(buffer + offset), str_length);
         offset += str_length;
         return json(value);
     }
-    
+
     size_t get_byte_length() const override { return 0; } // Variable length
     bool is_static_length() const override { return false; }
     size_t calculate_byte_length(const json& value) const override {
         size_t str_len = value.get<std::string>().length();
-        return (use_two_byte_header_ ? 2 : 1) + str_len;
+        return header_size() + str_len;
     }
 };
 

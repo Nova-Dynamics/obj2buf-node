@@ -836,9 +836,9 @@ describe('Types', function() {
             });
 
             it('should throw error for invalid max_length', function() {
-                expect(() => new VarStringType(0)).to.throw(Error, 'max_length must be between 1 and 65535');
-                expect(() => new VarStringType(65536)).to.throw(Error, 'max_length must be between 1 and 65535');
-                expect(() => new VarStringType(-1)).to.throw(Error, 'max_length must be between 1 and 65535');
+                expect(() => new VarStringType(0)).to.throw(Error, 'max_length must be between 1 and 4294967296');
+                expect(() => new VarStringType(4294967296)).to.throw(Error, 'max_length must be between 1 and 4294967296');
+                expect(() => new VarStringType(-1)).to.throw(Error, 'max_length must be between 1 and 4294967296');
             });
         });
 
