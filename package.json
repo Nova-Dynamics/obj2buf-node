@@ -1,6 +1,6 @@
 {
   "name": "obj2buf",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A type-safe encoder/decoder for structured binary data with snake_case API design",
   "main": "index.js",
   "files": [
