@@ -2,3 +2,7 @@ node_modules
 bindings/cpp/include
 bindings/cpp/obj2buf_example
 bindings/cpp/obj2buf_example.exe
+bindings/cpp/obj2buf_test
+bindings/cpp/obj2buf_test.exe
+bindings/cpp/example
+bindings/cpp/example.exe

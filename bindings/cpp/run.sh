@@ -1,11 +1,25 @@
 #!/bin/bash
 
-# obj2buf C++ Example Runner
-# This script downloads dependencies, compiles, and runs the example
+# obj2buf C++ Test Runner
+# This script downloads dependencies, compiles, and runs comp    echo "🎉 All tests passed successfully!"
+    echo ""
+    echo "📊 Test Summary:"
+    echo "   ✅ Basic primitive types (UInt32, BooleanType, Float32)"
+    echo "   ✅ String types (FixedStringType, VarStringType)"
+    echo "   ✅ Complex types (ArrayType, OptionalType)"
+    echo "   ✅ Schema-based serialization/deserialization"
+    echo "   ✅ JSON compatibility and validation"
+    echo "   ✅ Error handling and bounds checking"
+    echo ""
+    echo "🔧 Development Commands:"
+    echo "   📝 Run tests again: ./$OUTPUT"
+    echo "   🧹 Clean build: rm -f $OUTPUT"
+    echo "   🗑️  Clean all: rm -f $OUTPUT && rm -rf include/"
+    echo "   📚 View header: less obj2buf.hpp"
 
 set -e  # Exit on any error
 
-echo "🚀 obj2buf C++ Example Runner"
+echo "🧪 obj2buf C++ Test Runner"
 echo "================================"
 
 # Create local include directory
@@ -32,39 +46,94 @@ else
     echo "✅ nlohmann/json already available"
 fi
 
-# Compile the example
-echo "🔨 Compiling example.cpp..."
+# Detect best compiler and version
+echo "� Detecting C++ compiler..."
 
-# Compiler flags
-CXXFLAGS="-std=c++11 -Wall -Wextra -O2"
-INCLUDES="-I./include -I."
-OUTPUT="obj2buf_example"
+CXX=""
+CXXFLAGS=""
 
 if command -v g++ >/dev/null 2>&1; then
     CXX="g++"
+    # Check if C++14 or C++17 is supported
+    if g++ -std=c++17 -dumpversion >/dev/null 2>&1; then
+        CXXFLAGS="-std=c++17 -Wall -Wextra -O2"
+        echo "   Using: g++ with C++17 support"
+    elif g++ -std=c++14 -dumpversion >/dev/null 2>&1; then
+        CXXFLAGS="-std=c++14 -Wall -Wextra -O2"
+        echo "   Using: g++ with C++14 support"
+    else
+        CXXFLAGS="-std=c++11 -Wall -Wextra -O2"
+        echo "   Using: g++ with C++11 support"
+    fi
 elif command -v clang++ >/dev/null 2>&1; then
     CXX="clang++"
+    # Check clang++ version for C++ standard support
+    if clang++ -std=c++17 -dumpversion >/dev/null 2>&1; then
+        CXXFLAGS="-std=c++17 -Wall -Wextra -O2"
+        echo "   Using: clang++ with C++17 support"
+    elif clang++ -std=c++14 -dumpversion >/dev/null 2>&1; then
+        CXXFLAGS="-std=c++14 -Wall -Wextra -O2"
+        echo "   Using: clang++ with C++14 support"
+    else
+        CXXFLAGS="-std=c++11 -Wall -Wextra -O2"
+        echo "   Using: clang++ with C++11 support"
+    fi
 else
     echo "❌ Error: No C++ compiler found (g++ or clang++)"
     exit 1
 fi
 
-echo "   Using compiler: $CXX"
+INCLUDES="-I./include -I."
+OUTPUT="obj2buf_test"
+
+# Compile the tests
+echo "🔨 Compiling test suite..."
+echo "   Compiler: $CXX"
 echo "   Flags: $CXXFLAGS"
 
 $CXX $CXXFLAGS $INCLUDES example.cpp -o $OUTPUT
 
-echo "✅ Compilation successful"
+if [ $? -eq 0 ]; then
+    echo "✅ Compilation successful"
+else
+    echo "❌ Compilation failed"
+    exit 1
+fi
 
-# Run the example
-echo "🎯 Running the example..."
+# Run the tests
+echo ""
+echo "🎯 Running test suite..."
 echo "================================"
 
 ./$OUTPUT
 
+TEST_EXIT_CODE=$?
+
 echo ""
 echo "================================"
-echo "🎉 Example completed successfully!"
-echo ""
-echo "📝 To run again: ./$OUTPUT"
-echo "🧹 To clean: rm -f $OUTPUT && rm -rf include/"
+
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+    echo "🎉 All tests passed successfully!"
+    echo ""
+    echo "📊 Test Summary:"
+    echo "   ✅ Basic primitive types (UInt32)"
+    echo "   ✅ Complex types (ArrayType with fixed length)"
+    echo "   ✅ String types (FixedStringType)"
+    echo "   ✅ Schema-based serialization/deserialization"
+    echo "   ✅ JSON compatibility"
+    echo ""
+    echo "� Development Commands:"
+    echo "   📝 Run tests again: ./$OUTPUT"
+    echo "   🧹 Clean build: rm -f $OUTPUT"
+    echo "   🗑️  Clean all: rm -f $OUTPUT && rm -rf include/"
+    echo "   📚 View header: less obj2buf.hpp"
+else
+    echo "❌ Tests failed with exit code $TEST_EXIT_CODE"
+    echo ""
+    echo "🔧 Debug Commands:"
+    echo "   📝 Run with verbose output: ./$OUTPUT"
+    echo "   📚 Check implementation: less obj2buf.hpp"
+    echo "   🧹 Clean and retry: rm -f $OUTPUT && ./run.sh"
+fi
+
+exit $TEST_EXIT_CODE
