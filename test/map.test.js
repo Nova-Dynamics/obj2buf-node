@@ -13,6 +13,7 @@ const {
     BooleanType, 
     VarStringType, 
     ArrayType,
+    OptionalType,
     ParserError,
     from_json 
 } = require('../lib/types');
@@ -174,8 +175,17 @@ describe('MapType', () => {
             ]);
             
             expect(() => map.calculate_byte_length({ id: 123 })).to.throw(
-                ParserError, 'MapType missing required field: name'
+                ParserError, 'MapType field \'name\' is invalid: VarStringType value must be a string, got undefined'
             );
+        });
+
+        it('should\'t throw error for missing Optional fields', () => {
+            const map = new MapType([
+                ['id', new UInt16()],
+                ['name', new OptionalType(new VarStringType(10))]
+            ]);
+            
+            expect(() => map.calculate_byte_length({ id: 123 })).to.not.throw();
         });
     });
 
@@ -259,6 +269,11 @@ describe('MapType', () => {
             ['name', new VarStringType(10)],
             ['active', new BooleanType()]
         ]);
+        const map2 = new MapType([
+            ['id', new UInt8()],
+            ['name', new OptionalType(new VarStringType(10))],
+            ['active', new BooleanType()]
+        ]);
 
         it('should validate correct map values', () => {
             const value = { id: 42, name: 'test', active: true };
@@ -284,11 +299,15 @@ describe('MapType', () => {
 
         it('should throw error for missing required fields', () => {
             expect(() => map.validate({ id: 42, name: 'test' })).to.throw(
-                ParserError, 'MapType missing required field: active'
+                ParserError, 'MapType field \'active\' is invalid: Cannot encode undefined as BooleanType. Expected a valid value.'
             );
             expect(() => map.validate({ id: 42 })).to.throw(
-                ParserError, 'MapType missing required field: name'
+                ParserError, 'MapType field \'name\' is invalid: Cannot encode undefined as VarStringType. Expected a valid value.'
             );
+        });
+        it('shouldn\'t throw error for missing Optional fields', () => {
+            expect(() => map2.validate({ id: 42, name: 'test', active:true })).to.not.throw()
+            expect(() => map2.validate({ id: 42, active:true })).to.not.throw()
         });
 
         it('should throw error for invalid field types', () => {
