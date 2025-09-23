@@ -388,15 +388,21 @@ public:
     explicit VarStringType(size_t max_length = 65535)
         : max_length_(max_length) {}
 
-    // Returns header size (1 or 2 bytes) based on max_length
+    // Returns header size (1, 2, or 4 bytes) based on max_length
     size_t header_size() const {
-        return max_length_ >= 256 ? 2 : 1;
+        return max_length_ < 256 ? 1 : (max_length_ < 65536 ? 2 : 4);
     }
 
     json deserialize(const uint8_t* buffer, size_t& offset, size_t buffer_size) const override {
         size_t str_length;
         size_t hdr_size = header_size();
-        if (hdr_size == 2) {
+        if (hdr_size == 4) {
+            if (offset + 4 > buffer_size) {
+                throw parser_error("Buffer underflow reading VarStringType header (4-byte)");
+            }
+            str_length = buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24);
+            offset += 4;
+        } else if (hdr_size == 2) {
             if (offset + 2 > buffer_size) {
                 throw parser_error("Buffer underflow reading VarStringType header (2-byte)");
             }
