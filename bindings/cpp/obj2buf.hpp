@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- * obj2buf C++ Bindings v1.2.0
+ * obj2buf C++ Bindings v1.3.0
  * 
  * Header-only C++11 library for deserializing binary data created by obj2buf JavaScript library.
  * Compatible with obj2buf JavaScript library v1.0.0+
@@ -11,9 +11,9 @@
  */
 
 #define OBJ2BUF_VERSION_MAJOR 1
-#define OBJ2BUF_VERSION_MINOR 2
+#define OBJ2BUF_VERSION_MINOR 3
 #define OBJ2BUF_VERSION_PATCH 0
-#define OBJ2BUF_VERSION "1.2.0"
+#define OBJ2BUF_VERSION "1.3.0"
 
 #include <nlohmann/json.hpp>
 #include <string>
@@ -602,16 +602,19 @@ public:
 class VarStringType : public Type {
 private:
     size_t max_length_;
+    size_t header_size_;
+
 
 public:
     explicit VarStringType(size_t max_length = 65535) : max_length_(max_length) {
         if (max_length < 1 || max_length > 4294967295UL) {
             throw std::invalid_argument("max_length must be between 1 and 4294967295");
         }
+        header_size_ = max_length_ < 256 ? 1 : (max_length_ < 65536 ? 2 : 4);
     }
 
     size_t get_header_size() const {
-        return max_length_ < 256 ? 1 : (max_length_ < 65536 ? 2 : 4);
+        return header_size_;
     }
 
     json deserialize(const uint8_t* buffer, size_t& offset, size_t buffer_size) const override {
@@ -719,6 +722,159 @@ public:
 
     json to_json() const {
         return json{{"type", "VarStringType"}, {"max_length", max_length_}};
+    }
+};
+
+class VarBufferType : public Type {
+private:
+    size_t max_length_;
+    size_t header_size_;
+
+public:
+    explicit VarBufferType(size_t max_length = 65535) : max_length_(max_length) {
+        if (max_length < 1 || max_length > 4294967295UL) {
+            throw std::invalid_argument("max_length must be between 1 and 4294967295");
+        }
+        header_size_ = max_length_ < 256 ? 1 : (max_length_ < 65536 ? 2 : 4);
+    }
+
+    size_t get_header_size() const {
+        return header_size_;
+    }
+
+    json deserialize(const uint8_t* buffer, size_t& offset, size_t buffer_size) const override {
+        size_t header_size = get_header_size();
+        
+        if (offset + header_size > buffer_size) {
+            throw parser_error("Buffer too small to read buffer length");
+        }
+        
+        size_t length;
+        if (header_size == 1) {
+            length = buffer[offset];
+        } else if (header_size == 2) {
+            length = buffer[offset] | (static_cast<size_t>(buffer[offset + 1]) << 8);
+        } else {
+            length = buffer[offset] | 
+                    (static_cast<size_t>(buffer[offset + 1]) << 8) |
+                    (static_cast<size_t>(buffer[offset + 2]) << 16) |
+                    (static_cast<size_t>(buffer[offset + 3]) << 24);
+        }
+        
+        if (offset + header_size + length > buffer_size) {
+            throw parser_error("Buffer too small to read buffer of length " + std::to_string(length));
+        }
+        
+        // Return buffer data as a JSON array of bytes
+        json buffer_data = json::array();
+        for (size_t i = 0; i < length; ++i) {
+            buffer_data.push_back(static_cast<int>(buffer[offset + header_size + i]));
+        }
+        
+        offset += header_size + length;
+        return buffer_data;
+    }
+
+    size_t get_byte_length() const override {
+        return 0; // Variable length
+    }
+
+    bool is_static_length() const override {
+        return false;
+    }
+
+    size_t calculate_byte_length(const json& value) const override {
+        if (!value.is_array()) {
+            throw parser_error("VarBufferType value must be an array");
+        }
+        
+        return get_header_size() + value.size();
+    }
+
+    size_t encode(const json& value, uint8_t* buffer, size_t offset, size_t buffer_size, bool unsafe = false) const {
+        if (!unsafe) {
+            validate(value);
+        }
+        
+        if (!value.is_array()) {
+            throw parser_error("VarBufferType value must be an array");
+        }
+        
+        size_t length = value.size();
+        size_t header_size = get_header_size();
+        size_t total_bytes = header_size + length;
+        
+        if (offset + total_bytes > buffer_size) {
+            throw parser_error("Buffer too small to encode buffer. Required: " + 
+                             std::to_string(total_bytes) + ", Available: " + 
+                             std::to_string(buffer_size - offset));
+        }
+        
+        // Write length prefix
+        if (header_size == 1) {
+            buffer[offset] = static_cast<uint8_t>(length);
+        } else if (header_size == 2) {
+            buffer[offset] = static_cast<uint8_t>(length & 0xFF);
+            buffer[offset + 1] = static_cast<uint8_t>((length >> 8) & 0xFF);
+        } else {
+            buffer[offset] = static_cast<uint8_t>(length & 0xFF);
+            buffer[offset + 1] = static_cast<uint8_t>((length >> 8) & 0xFF);
+            buffer[offset + 2] = static_cast<uint8_t>((length >> 16) & 0xFF);
+            buffer[offset + 3] = static_cast<uint8_t>((length >> 24) & 0xFF);
+        }
+        
+        // Write buffer data
+        for (size_t i = 0; i < length; ++i) {
+            if (!value[i].is_number_integer()) {
+                throw parser_error("VarBufferType array elements must be integers (0-255)");
+            }
+            int byte_value = value[i].get<int>();
+            if (byte_value < 0 || byte_value > 255) {
+                throw parser_error("VarBufferType array elements must be in range 0-255, got " + std::to_string(byte_value));
+            }
+            buffer[offset + header_size + i] = static_cast<uint8_t>(byte_value);
+        }
+        
+        return total_bytes;
+    }
+
+    bool validate(const json& value) const {
+        throw_if_nullish_json(value, "VarBufferType");
+        
+        if (!value.is_array()) {
+            throw parser_error("VarBufferType value must be an array");
+        }
+        
+        if (value.size() > max_length_) {
+            throw parser_error("VarBufferType byte length exceeds maximum: " + 
+                             std::to_string(value.size()) + " > " + std::to_string(max_length_));
+        }
+        
+        // Check header size limits
+        size_t max_header_value = get_header_size() == 1 ? 255 : 
+                                 (get_header_size() == 2 ? 65535 : 4294967295UL);
+        if (value.size() > max_header_value) {
+            throw parser_error("VarBufferType byte length exceeds header maximum: " + 
+                             std::to_string(value.size()) + " > " + std::to_string(max_header_value));
+        }
+        
+        // Validate each byte value
+        for (size_t i = 0; i < value.size(); ++i) {
+            if (!value[i].is_number_integer()) {
+                throw parser_error("VarBufferType array element at index " + std::to_string(i) + " must be an integer");
+            }
+            int byte_value = value[i].get<int>();
+            if (byte_value < 0 || byte_value > 255) {
+                throw parser_error("VarBufferType array element at index " + std::to_string(i) + 
+                                 " must be in range 0-255, got " + std::to_string(byte_value));
+            }
+        }
+        
+        return true;
+    }
+
+    json to_json() const {
+        return json{{"type", "VarBufferType"}, {"max_length", max_length_}};
     }
 };
 
@@ -1412,6 +1568,12 @@ inline std::unique_ptr<Type> Type::from_json(const json& type_def) {
             max_length = type_def["max_length"];
         }
         return make_unique_ptr<VarStringType>(max_length);
+    } else if (type_name == "VarBufferType") {
+        size_t max_length = 65535; // default
+        if (type_def.contains("max_length")) {
+            max_length = type_def["max_length"];
+        }
+        return make_unique_ptr<VarBufferType>(max_length);
     } else if (type_name == "EnumType") {
         if (!type_def.contains("options")) {
             throw std::invalid_argument("EnumType requires 'options' field");

@@ -66,7 +66,28 @@ void test_string_types() {
     
     offset = 0;
     obj2buf::json decoded_var = var_string.deserialize(var_buffer.data(), offset, var_buffer.size());
-    std::cout << "VarStringType: '" << var_value.get<std::string>() << "' -> '" << decoded_var.get<std::string>() << "' (bytes: " << bytes_written << ")\n\n";
+    std::cout << "VarStringType: '" << var_value.get<std::string>() << "' -> '" << decoded_var.get<std::string>() << "' (bytes: " << bytes_written << ")\n";
+    
+    // Test VarBufferType
+    obj2buf::VarBufferType var_buffer_type(100);
+    obj2buf::json buffer_value = {0x01, 0x02, 0x03, 0xFF, 0x00, 0xAB}; // Array of bytes
+    std::vector<uint8_t> buffer_storage(100);
+    size_t buffer_bytes_written = var_buffer_type.encode(buffer_value, buffer_storage.data(), 0, buffer_storage.size());
+    
+    offset = 0;
+    obj2buf::json decoded_buffer = var_buffer_type.deserialize(buffer_storage.data(), offset, buffer_storage.size());
+    std::cout << "VarBufferType: " << buffer_value << " -> " << decoded_buffer << " (bytes: " << buffer_bytes_written << ")\n";
+
+    // Test VarBufferType with Schema
+    obj2buf::json buffer_schema = {
+        {"type", "VarBufferType"},
+        {"max_length", 50}
+    };
+    obj2buf::Schema buffer_schema_obj(buffer_schema);
+    obj2buf::json schema_buffer_value = {0xDE, 0xAD, 0xBE, 0xEF};
+    std::vector<uint8_t> schema_serialized = buffer_schema_obj.serialize(schema_buffer_value);
+    obj2buf::json schema_deserialized = buffer_schema_obj.deserialize(schema_serialized);
+    std::cout << "VarBufferType (Schema): " << schema_buffer_value << " -> " << schema_deserialized << "\n\n";
 }
 
 void test_complex_types() {
@@ -138,6 +159,26 @@ void test_validation() {
         std::cout << "✅ Validation correctly caught: " << e.what() << "\n";
     }
     
+    try {
+        obj2buf::VarBufferType buffer_type(5);
+        obj2buf::json invalid_buffer = {1, 2, 3, 4, 5, 6}; // Exceeds max_length of 5
+        std::vector<uint8_t> buffer(10);
+        buffer_type.encode(invalid_buffer, buffer.data(), 0, buffer.size());
+        std::cout << "❌ Should have thrown validation error!\n";
+    } catch (const obj2buf::parser_error& e) {
+        std::cout << "✅ VarBufferType validation correctly caught: " << e.what() << "\n";
+    }
+    
+    try {
+        obj2buf::VarBufferType buffer_type(10);
+        obj2buf::json invalid_buffer = {1, 256, 3}; // 256 is out of range for uint8
+        std::vector<uint8_t> buffer(10);
+        buffer_type.encode(invalid_buffer, buffer.data(), 0, buffer.size());
+        std::cout << "❌ Should have thrown validation error!\n";
+    } catch (const obj2buf::parser_error& e) {
+        std::cout << "✅ VarBufferType byte range validation correctly caught: " << e.what() << "\n";
+    }
+    
     std::cout << "\n";
 }
 
@@ -155,6 +196,7 @@ int main() {
         std::cout << "\n📋 Test Coverage Summary:\n";
         std::cout << "   ✅ Basic primitive types (UInt32, BooleanType, Float32)\n";
         std::cout << "   ✅ String types (FixedStringType, VarStringType)\n";
+        std::cout << "   ✅ Buffer types (VarBufferType)\n";
         std::cout << "   ✅ Complex types (ArrayType, OptionalType)\n";
         std::cout << "   ✅ Schema-based serialization/deserialization\n";
         std::cout << "   ✅ JSON compatibility and validation\n";
