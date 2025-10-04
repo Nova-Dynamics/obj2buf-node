@@ -90,6 +90,91 @@ void test_string_types() {
     std::cout << "VarBufferType (Schema): " << schema_buffer_value << " -> " << schema_deserialized << "\n\n";
 }
 
+void test_json_types() {
+    std::cout << "Testing JSON types:\n";
+    std::cout << "==================\n";
+    
+    // Test JSONType with simple object
+    obj2buf::JSONType json_type(1000);
+    obj2buf::json simple_object = {
+        {"name", "John Doe"},
+        {"age", 30},
+        {"active", true}
+    };
+    
+    std::vector<uint8_t> json_buffer(1000);
+    size_t json_bytes_written = json_type.encode(simple_object, json_buffer.data(), 0, json_buffer.size());
+    
+    size_t offset = 0;
+    obj2buf::json decoded_json = json_type.deserialize(json_buffer.data(), offset, json_buffer.size());
+    std::cout << "JSONType (simple object): " << simple_object.dump() << "\n";
+    std::cout << "Decoded: " << decoded_json.dump() << " (bytes: " << json_bytes_written << ")\n";
+    
+    // Test JSONType with complex nested structure
+    obj2buf::json complex_object = {
+        {"user", {
+            {"profile", {
+                {"name", "Alice"},
+                {"preferences", {
+                    {"theme", "dark"},
+                    {"notifications", true},
+                    {"languages", {"en", "es", "fr"}}
+                }}
+            }},
+            {"stats", {
+                {"login_count", 42},
+                {"last_active", "2023-10-15T14:30:00Z"}
+            }}
+        }},
+        {"metadata", {
+            {"version", "1.2.3"},
+            {"timestamp", 1697375400}
+        }}
+    };
+    
+    std::vector<uint8_t> complex_buffer(2000);
+    size_t complex_bytes_written = json_type.encode(complex_object, complex_buffer.data(), 0, complex_buffer.size());
+    
+    offset = 0;
+    obj2buf::json decoded_complex = json_type.deserialize(complex_buffer.data(), offset, complex_buffer.size());
+    std::cout << "\nJSONType (complex object): " << complex_object.dump(2) << "\n";
+    std::cout << "Decoded successfully: " << (decoded_complex == complex_object ? "✅" : "❌") << " (bytes: " << complex_bytes_written << ")\n";
+    
+    // Test JSONType with array
+    obj2buf::json array_value = {1, 2, 3, {"nested", "object"}, true, nullptr};
+    std::vector<uint8_t> array_buffer(500);
+    size_t array_bytes_written = json_type.encode(array_value, array_buffer.data(), 0, array_buffer.size());
+    
+    offset = 0;
+    obj2buf::json decoded_array = json_type.deserialize(array_buffer.data(), offset, array_buffer.size());
+    std::cout << "\nJSONType (array): " << array_value.dump() << "\n";
+    std::cout << "Decoded: " << decoded_array.dump() << " (bytes: " << array_bytes_written << ")\n";
+    
+    // Test JSONType with Schema
+    obj2buf::json json_schema = {
+        {"type", "JSONType"},
+        {"max_length", 500}
+    };
+    obj2buf::Schema json_schema_obj(json_schema);
+    obj2buf::json config_data = {
+        {"server", {
+            {"host", "localhost"},
+            {"port", 8080},
+            {"ssl", false}
+        }},
+        {"database", {
+            {"driver", "postgresql"},
+            {"connection_string", "postgres://user:pass@localhost/db"}
+        }}
+    };
+    
+    std::vector<uint8_t> schema_serialized = json_schema_obj.serialize(config_data);
+    obj2buf::json schema_deserialized = json_schema_obj.deserialize(schema_serialized);
+    std::cout << "\nJSONType (Schema): Configuration data encoded/decoded successfully: " 
+              << (schema_deserialized == config_data ? "✅" : "❌") << "\n";
+    std::cout << "Original size: " << config_data.dump().length() << " chars, encoded size: " << schema_serialized.size() << " bytes\n\n";
+}
+
 void test_complex_types() {
     std::cout << "Testing complex types:\n";
     std::cout << "=====================\n";
@@ -132,7 +217,25 @@ void test_complex_types() {
     obj2buf::json null_value = nullptr;
     std::vector<uint8_t> null_serialized = opt_schema.serialize(null_value);
     obj2buf::json null_deserialized = opt_schema.deserialize(null_serialized);
-    std::cout << "OptionalType with null: null -> " << (null_deserialized.is_null() ? "null" : "not null") << "\n\n";
+    std::cout << "OptionalType with null: null -> " << (null_deserialized.is_null() ? "null" : "not null") << "\n";
+    
+    // Test ArrayType with JSONType elements
+    obj2buf::json json_array_schema = {
+        {"type", "ArrayType"},
+        {"element_type", {{"type", "JSONType"}, {"max_length", 200}}},
+        {"length", 2}
+    };
+    
+    obj2buf::Schema json_array_schema_obj(json_array_schema);
+    obj2buf::json json_array_value = {
+        {{"name", "Item 1"}, {"value", 100}},
+        {{"name", "Item 2"}, {"value", 200}}
+    };
+    
+    std::vector<uint8_t> json_array_serialized = json_array_schema_obj.serialize(json_array_value);
+    obj2buf::json json_array_deserialized = json_array_schema_obj.deserialize(json_array_serialized);
+    std::cout << "ArrayType[2] of JSONType: " << json_array_value.dump() << "\n";
+    std::cout << "Decoded: " << json_array_deserialized.dump() << " (match: " << (json_array_deserialized == json_array_value ? "✅" : "❌") << ")\n\n";
 }
 
 void test_validation() {
@@ -179,6 +282,22 @@ void test_validation() {
         std::cout << "✅ VarBufferType byte range validation correctly caught: " << e.what() << "\n";
     }
     
+    try {
+        obj2buf::JSONType json_type(10); // Very small max_length
+        obj2buf::json large_json = {
+            {"this", "is"},
+            {"a", "large"},
+            {"json", "object"},
+            {"that", "exceeds"},
+            {"the", "limit"}
+        };
+        std::vector<uint8_t> buffer(50);
+        json_type.encode(large_json, buffer.data(), 0, buffer.size());
+        std::cout << "❌ Should have thrown validation error!\n";
+    } catch (const obj2buf::parser_error& e) {
+        std::cout << "✅ JSONType validation correctly caught: " << e.what() << "\n";
+    }
+    
     std::cout << "\n";
 }
 
@@ -189,6 +308,7 @@ int main() {
     try {
         test_basic_types();
         test_string_types();
+        test_json_types();
         test_complex_types();
         test_validation();
         
@@ -197,7 +317,8 @@ int main() {
         std::cout << "   ✅ Basic primitive types (UInt32, BooleanType, Float32)\n";
         std::cout << "   ✅ String types (FixedStringType, VarStringType)\n";
         std::cout << "   ✅ Buffer types (VarBufferType)\n";
-        std::cout << "   ✅ Complex types (ArrayType, OptionalType)\n";
+        std::cout << "   ✅ JSON types (JSONType with objects, arrays, nested data)\n";
+        std::cout << "   ✅ Complex types (ArrayType, OptionalType, JSONType arrays)\n";
         std::cout << "   ✅ Schema-based serialization/deserialization\n";
         std::cout << "   ✅ JSON compatibility and validation\n";
         std::cout << "   ✅ Error handling and bounds checking\n";

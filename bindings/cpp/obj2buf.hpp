@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- * obj2buf C++ Bindings v1.3.0
+ * obj2buf C++ Bindings v1.4.0
  * 
  * Header-only C++11 library for deserializing binary data created by obj2buf JavaScript library.
  * Compatible with obj2buf JavaScript library v1.0.0+
@@ -11,9 +11,9 @@
  */
 
 #define OBJ2BUF_VERSION_MAJOR 1
-#define OBJ2BUF_VERSION_MINOR 3
+#define OBJ2BUF_VERSION_MINOR 4
 #define OBJ2BUF_VERSION_PATCH 0
-#define OBJ2BUF_VERSION "1.3.0"
+#define OBJ2BUF_VERSION "1.4.0"
 
 #include <nlohmann/json.hpp>
 #include <string>
@@ -878,6 +878,133 @@ public:
     }
 };
 
+class JSONType : public Type {
+private:
+    size_t max_length_;
+    size_t header_size_;
+
+public:
+    explicit JSONType(size_t max_length = 65535) : max_length_(max_length) {
+        if (max_length < 1 || max_length > 4294967295UL) {
+            throw std::invalid_argument("max_length must be between 1 and 4294967295");
+        }
+        header_size_ = max_length_ < 256 ? 1 : (max_length_ < 65536 ? 2 : 4);
+    }
+
+    size_t get_header_size() const {
+        return header_size_;
+    }
+
+    json deserialize(const uint8_t* buffer, size_t& offset, size_t buffer_size) const override {
+        size_t header_size = get_header_size();
+        
+        if (offset + header_size > buffer_size) {
+            throw parser_error("Buffer too small to read JSON string length");
+        }
+        
+        size_t length;
+        if (header_size == 1) {
+            length = buffer[offset];
+        } else if (header_size == 2) {
+            length = buffer[offset] | (static_cast<size_t>(buffer[offset + 1]) << 8);
+        } else {
+            length = buffer[offset] | 
+                    (static_cast<size_t>(buffer[offset + 1]) << 8) |
+                    (static_cast<size_t>(buffer[offset + 2]) << 16) |
+                    (static_cast<size_t>(buffer[offset + 3]) << 24);
+        }
+        
+        if (offset + header_size + length > buffer_size) {
+            throw parser_error("Buffer too small to read JSON string of length " + std::to_string(length));
+        }
+        
+        std::string json_string(reinterpret_cast<const char*>(buffer + offset + header_size), length);
+        offset += header_size + length;
+        
+        try {
+            return json::parse(json_string);
+        } catch (const json::parse_error& e) {
+            throw parser_error("Invalid JSON string: " + std::string(e.what()));
+        }
+    }
+
+    size_t get_byte_length() const override {
+        return 0; // Variable length
+    }
+
+    bool is_static_length() const override {
+        return false;
+    }
+
+    size_t calculate_byte_length(const json& value) const override {
+        std::string json_string = value.dump();
+        return get_header_size() + json_string.length();
+    }
+
+    size_t encode(const json& value, uint8_t* buffer, size_t offset, size_t buffer_size, bool unsafe = false) const {
+        std::string json_string = value.dump();
+        
+        if (!unsafe) {
+            validate_json_string(json_string);
+        }
+        
+        size_t header_size = get_header_size();
+        size_t total_bytes = header_size + json_string.length();
+        
+        if (offset + total_bytes > buffer_size) {
+            throw parser_error("Buffer too small to encode JSON. Required: " + 
+                             std::to_string(total_bytes) + ", Available: " + 
+                             std::to_string(buffer_size - offset));
+        }
+        
+        // Write length prefix
+        if (header_size == 1) {
+            buffer[offset] = static_cast<uint8_t>(json_string.length());
+        } else if (header_size == 2) {
+            buffer[offset] = static_cast<uint8_t>(json_string.length() & 0xFF);
+            buffer[offset + 1] = static_cast<uint8_t>((json_string.length() >> 8) & 0xFF);
+        } else {
+            buffer[offset] = static_cast<uint8_t>(json_string.length() & 0xFF);
+            buffer[offset + 1] = static_cast<uint8_t>((json_string.length() >> 8) & 0xFF);
+            buffer[offset + 2] = static_cast<uint8_t>((json_string.length() >> 16) & 0xFF);
+            buffer[offset + 3] = static_cast<uint8_t>((json_string.length() >> 24) & 0xFF);
+        }
+        
+        // Write JSON string
+        std::memcpy(buffer + offset + header_size, json_string.c_str(), json_string.length());
+        
+        return total_bytes;
+    }
+
+    bool validate(const json& value) const {
+        // Any valid JSON value is acceptable for JSONType
+        std::string json_string = value.dump();
+        validate_json_string(json_string);
+        return true;
+    }
+
+private:
+    void validate_json_string(const std::string& json_string) const {
+        if (json_string.length() > max_length_) {
+            throw parser_error("JSONType byte length exceeds maximum: " + 
+                             std::to_string(json_string.length()) + " > " + std::to_string(max_length_));
+        }
+        
+        // Check header size limits
+        size_t max_header_value = get_header_size() == 1 ? 255 : 
+                                 (get_header_size() == 2 ? 65535 : 4294967295UL);
+        if (json_string.length() > max_header_value) {
+            throw parser_error("JSONType byte length exceeds header maximum: " + 
+                             std::to_string(json_string.length()) + " > " + std::to_string(max_header_value));
+        }
+    }
+
+public:
+    json to_json() const {
+        return json{{"type", "JSONType"}, {"max_length", max_length_}};
+    }
+};
+
 class ArrayType : public Type {
 private:
     std::unique_ptr<Type> element_type_;
@@ -1574,6 +1701,12 @@ inline std::unique_ptr<Type> Type::from_json(const json& type_def) {
             max_length = type_def["max_length"];
         }
         return make_unique_ptr<VarBufferType>(max_length);
+    } else if (type_name == "JSONType") {
+        size_t max_length = 65535; // default
+        if (type_def.contains("max_length")) {
+            max_length = type_def["max_length"];
+        }
+        return make_unique_ptr<JSONType>(max_length);
     } else if (type_name == "EnumType") {
         if (!type_def.contains("options")) {
             throw std::invalid_argument("EnumType requires 'options' field");
